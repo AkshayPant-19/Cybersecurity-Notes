@@ -123,15 +123,27 @@ function renderHeader() {
   `;
 }
 
+let searchQuery = '';
+
 function renderSidebar() {
   const nav = document.getElementById('sidebar-nav');
-  nav.innerHTML = sections.map(s => `
-    <li><a class="${s.id === currentSectionId ? 'active' : ''}" onclick="renderSection('${s.id}')">
-      <span class="icon">${s.icon || '📄'}</span>
-      <span class="nav-title">${escapeHtml(s.title)}</span>
-      <span class="check" id="check-${s.id}" style="display:none">&#10003;</span>
-    </a></li>
-  `).join('');
+  const filtered = searchQuery
+    ? sections.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : sections;
+  nav.innerHTML = filtered.length
+    ? filtered.map(s => `
+      <li><a class="${s.id === currentSectionId ? 'active' : ''}" onclick="renderSection('${s.id}')">
+        <span class="icon">${s.icon || '📄'}</span>
+        <span class="nav-title">${escapeHtml(s.title)}</span>
+        <span class="check" id="check-${s.id}" style="display:none">&#10003;</span>
+      </a></li>
+    `).join('')
+    : '<li class="no-results">No topics found</li>';
+}
+
+function onSearchInput() {
+  searchQuery = document.getElementById('search-input').value;
+  renderSidebar();
 }
 
 /* ─── Dashboard ─── */

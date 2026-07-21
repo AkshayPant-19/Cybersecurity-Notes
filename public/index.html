@@ -9,8 +9,12 @@
 <body>
   <header id="header"></header>
   <div class="app-layout" id="app">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-title">Topics</div>
+      <div class="search-wrap">
+        <input type="text" id="search-input" placeholder="Search topics..." oninput="onSearchInput()">
+        <span class="search-icon">&#x1F50D;</span>
+      </div>
       <ul class="sidebar-nav" id="sidebar-nav"></ul>
     </aside>
     <main class="main-content" id="content">
