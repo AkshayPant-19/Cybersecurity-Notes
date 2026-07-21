@@ -1,104 +1,72 @@
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const dbPath = path.join(__dirname, '..', 'cybersec.db');
-
-let db;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/cybersec',
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
 
 async function initDatabase() {
-  const SQL = await initSqlJs();
-  if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS streaks (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        visit_date DATE NOT NULL,
+        UNIQUE(user_id, visit_date)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS progress (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        section_id TEXT NOT NULL,
+        completed INTEGER DEFAULT 0,
+        UNIQUE(user_id, section_id)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS quiz_scores (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        section_id TEXT NOT NULL,
+        score INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Database tables ready');
+  } finally {
+    client.release();
   }
-
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS streaks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    visit_date DATE NOT NULL,
-    UNIQUE(user_id, visit_date),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    section_id TEXT NOT NULL,
-    completed INTEGER DEFAULT 0,
-    UNIQUE(user_id, section_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`);
-
-  saveDb();
-  return db;
 }
 
-function saveDb() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+function query(text, params) {
+  return pool.query(text, params);
 }
 
-function prepare(sql) {
-  return {
-    run: (...params) => {
-      db.run(sql, params);
-      saveDb();
-      return { lastInsertRowid: db.exec("SELECT last_insert_rowid() as id")[0]?.values[0][0] };
-    },
-    get: (...params) => {
-      const stmt = db.prepare(sql);
-      stmt.bind(params);
-      if (stmt.step()) {
-        const cols = stmt.getColumnNames();
-        const vals = stmt.get();
-        stmt.free();
-        const obj = {};
-        cols.forEach((c, i) => { obj[c] = vals[i]; });
-        return obj;
-      }
-      stmt.free();
-      return undefined;
-    },
-    all: (...params) => {
-      const stmt = db.prepare(sql);
-      stmt.bind(params);
-      const results = [];
-      while (stmt.step()) {
-        const cols = stmt.getColumnNames();
-        const vals = stmt.get();
-        const obj = {};
-        cols.forEach((c, i) => { obj[c] = vals[i]; });
-        results.push(obj);
-      }
-      stmt.free();
-      return results;
-    }
-  };
-}
-
-// Wrapper to match the original API
 const database = {
-  insertUser: { run: (username, email, password) => prepare('INSERT INTO users (username, email, password) VALUES (?, ?, ?)').run(username, email, password) },
-  findUserByUsername: { get: (username) => prepare('SELECT * FROM users WHERE username = ?').get(username) },
-  findUserByEmail: { get: (email) => prepare('SELECT * FROM users WHERE email = ?').get(email) },
-  findUserById: { get: (id) => prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(id) },
-  addVisit: { run: (userId, date) => prepare('INSERT OR IGNORE INTO streaks (user_id, visit_date) VALUES (?, ?)').run(userId, date) },
-  getStreaks: { all: (userId) => prepare('SELECT visit_date FROM streaks WHERE user_id = ? ORDER BY visit_date DESC').all(userId) },
-  getTotalVisits: { get: (userId) => prepare('SELECT COUNT(DISTINCT visit_date) as count FROM streaks WHERE user_id = ?').get(userId) },
-  upsertProgress: { run: (userId, sectionId, completed) => prepare('INSERT OR REPLACE INTO progress (user_id, section_id, completed) VALUES (?, ?, ?)').run(userId, sectionId, completed) },
-  getProgress: { all: (userId) => prepare('SELECT section_id, completed FROM progress WHERE user_id = ?').all(userId) }
+  findUserByUsername: { get: async (username) => { const r = await query('SELECT * FROM users WHERE username = $1', [username]); return r.rows[0]; } },
+  findUserByEmail: { get: async (email) => { const r = await query('SELECT * FROM users WHERE email = $1', [email]); return r.rows[0]; } },
+  findUserById: { get: async (id) => { const r = await query('SELECT id, username, email, created_at FROM users WHERE id = $1', [id]); return r.rows[0]; } },
+  insertUser: { run: async (username, email, password) => { const r = await query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id', [username, email, password]); return r.rows[0]; } },
+  addVisit: { run: async (userId, date) => { await query('INSERT INTO streaks (user_id, visit_date) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, date]); } },
+  getStreaks: { all: async (userId) => { const r = await query('SELECT visit_date FROM streaks WHERE user_id = $1 ORDER BY visit_date DESC', [userId]); return r.rows; } },
+  getTotalVisits: { get: async (userId) => { const r = await query('SELECT COUNT(DISTINCT visit_date) as count FROM streaks WHERE user_id = $1', [userId]); return { count: parseInt(r.rows[0].count, 10) }; } },
+  upsertProgress: { run: async (userId, sectionId, completed) => { await query('INSERT INTO progress (user_id, section_id, completed) VALUES ($1, $2, $3) ON CONFLICT (user_id, section_id) DO UPDATE SET completed = $3', [userId, sectionId, completed]); } },
+  getProgress: { all: async (userId) => { const r = await query('SELECT section_id, completed FROM progress WHERE user_id = $1', [userId]); return r.rows; } },
+  saveQuizScore: { run: async (userId, sectionId, score, total) => { await query('INSERT INTO quiz_scores (user_id, section_id, score, total) VALUES ($1, $2, $3, $4)', [userId, sectionId, score, total]); } },
+  getQuizScores: { all: async (userId) => { const r = await query('SELECT section_id, score, total, taken_at FROM quiz_scores WHERE user_id = $1 ORDER BY taken_at DESC', [userId]); return r.rows; } },
+  getBestQuizScore: { get: async (userId, sectionId) => { const r = await query('SELECT score, total, taken_at FROM quiz_scores WHERE user_id = $1 AND section_id = $2 ORDER BY score DESC LIMIT 1', [userId, sectionId]); return r.rows[0] || null; } }
 };
 
-module.exports = { initDatabase, database, saveDb };
+module.exports = { initDatabase, database, pool };
