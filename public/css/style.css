@@ -285,6 +285,15 @@ header {
 .sidebar-nav li a .icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
 .sidebar-nav li a .nav-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-nav li a .check { margin-left: auto; color: var(--accent); font-size: 14px; flex-shrink: 0; }
+.category-heading {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--warning);
+  padding: 16px 20px 4px;
+  list-style: none;
+  font-weight: 600;
+}
 
 /* ─── Main Content ─── */
 .main-content {

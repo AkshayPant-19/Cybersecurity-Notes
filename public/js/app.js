@@ -137,18 +137,26 @@ let searchQuery = '';
 
 function renderSidebar() {
   const nav = document.getElementById('sidebar-nav');
-  const filtered = searchQuery
+  let filtered = searchQuery
     ? sections.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : sections;
-  nav.innerHTML = filtered.length
-    ? filtered.map(s => `
-      <li><a class="${s.id === currentSectionId ? 'active' : ''}" onclick="renderSection('${s.id}')">
+  if (filtered.length) {
+    let lastCat = null, html = '';
+    filtered.forEach(s => {
+      if (s.category && s.category !== lastCat) {
+        html += `<li class="category-heading">${escapeHtml(s.category)}</li>`;
+        lastCat = s.category;
+      }
+      html += `<li><a class="${s.id === currentSectionId ? 'active' : ''}" onclick="renderSection('${s.id}')">
         <span class="icon">${s.icon || '📄'}</span>
         <span class="nav-title">${escapeHtml(s.title)}</span>
         <span class="check" id="check-${s.id}" style="display:none">&#10003;</span>
-      </a></li>
-    `).join('')
-    : '<li class="no-results">No topics found</li>';
+      </a></li>`;
+    });
+    nav.innerHTML = html;
+  } else {
+    nav.innerHTML = '<li class="no-results">No topics found</li>';
+  }
 }
 
 function onSearchInput() {
