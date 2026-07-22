@@ -9,11 +9,11 @@
 <body>
   <header id="header"></header>
   <div class="app-layout" id="app">
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-title">Topics</div>
-      <div class="search-wrap">
-        <input type="text" id="search-input" placeholder="Search topics..." oninput="onSearchInput()">
-        <span class="search-icon">&#x1F50D;</span>
+      <div class="sidebar-header">
+        <div class="sidebar-title">Topics</div>
+        <button class="sidebar-close" onclick="toggleSidebar()">&#x2716;</button>
       </div>
       <ul class="sidebar-nav" id="sidebar-nav"></ul>
     </aside>

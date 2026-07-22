@@ -102,9 +102,11 @@ function renderHeader() {
   const initial = auth.user ? auth.user.username.charAt(0).toUpperCase() : '?';
   header.innerHTML = `
     <div class="header-inner">
-      <a href="#" class="logo" onclick="event.preventDefault(); showDashboard()">
-        <span class="shield">&#x1F6E1;</span> CyberSec Notes
-      </a>
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar">&#x2630;</button>
+      <div class="search-wrap">
+        <input type="text" id="search-input" placeholder="Search topics..." oninput="onSearchInput()">
+        <span class="search-icon">&#x1F50D;</span>
+      </div>
       <div class="header-right">
         <div class="dashboard-btn" onclick="showDashboard()" title="Dashboard">
           <span>&#x1F4CA;</span>
@@ -121,6 +123,14 @@ function renderHeader() {
       </div>
     </div>
   `;
+}
+
+let sidebarOpen = false;
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+  document.getElementById('sidebar-overlay').classList.toggle('show', sidebarOpen);
+  document.body.classList.toggle('sidebar-open', sidebarOpen);
 }
 
 let searchQuery = '';
@@ -309,6 +319,7 @@ function renderSection(sectionId) {
   if (!section) return;
   currentSectionId = sectionId;
   renderSidebar();
+  if (window.innerWidth <= 1024 && sidebarOpen) toggleSidebar();
 
   const container = document.getElementById('content');
   container.innerHTML = `
